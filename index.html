@@ -117,9 +117,9 @@
                         </div>
 
                         <div class="mb-3">
-                            <label for="branchName" class="form-label">支所名</label>
+                            <label for="branchName" class="form-label">営業所名</label>
                             <select class="form-select" id="branchName" required>
-                                <option value="">支所を選択してください</option>
+                                <option value="">営業所を選択してください</option>
                             </select>
                         </div>
 
@@ -273,7 +273,12 @@
         function initialize() {
             // グローバル設定（最後に使用した科目など）を読み込む
             let globalSettings = JSON.parse(localStorage.getItem(GLOBAL_SETTINGS_KEY)) || {};
-            currentBudgetCategory = globalSettings.lastUsedCategory || BUDGET_CATEGORIES[0]; // デフォルトは最初の科目
+            let lastUsed = globalSettings.lastUsedCategory;
+            if (lastUsed && BUDGET_CATEGORIES.includes(lastUsed)) {
+                currentBudgetCategory = lastUsed;
+            } else {
+                currentBudgetCategory = BUDGET_CATEGORIES[0]; // 存在しないか未定義なら最初の科目をデフォルトに
+            }
 
             // 科目セレクタを先に生成・設定
             populateBudgetCategorySelector();
