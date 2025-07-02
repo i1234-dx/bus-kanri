@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>≪要求・予算執行管理≫</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .progress {
+            height: 25px;
+        }
+        .progress-bar {
+            font-size: 14px;
+            line-height: 25px;
+        }
+        .item-image {
+            max-width: 100px;
+            max-height: 100px;
+            object-fit: cover;
+            cursor: pointer;
+        }
+        .image-preview {
+            max-width: 200px;
+            max-height: 200px;
+            object-fit: contain;
+            margin-top: 10px;
+        }
+        .modal-image {
+            max-width: 100%;
+            max-height: 80vh;
+            object-fit: contain;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="mb-4">≪要求・予算執行管理≫</h1>
+
+        <div class="row align-items-center mb-4">
+            <div class="col-md-4">
+                <label for="budgetCategorySelector" class="form-label">執行予算科目</label>
+                <select id="budgetCategorySelector" class="form-select" onchange="handleBudgetCategoryChange()"></select>
+            </div>
+            <div class="col-md-4">
+                <label for="yearSelector" class="form-label">対象年度</label>
+                <select id="yearSelector" class="form-select" onchange="handleYearChange()"></select>
+            </div>
+            <div class="col-md-3"> <!-- 月セレクタ用の列 -->
+                <label for="monthSelector" class="form-label">対象月</label>
+                <select id="monthSelector" class="form-select" onchange="handleMonthChange()"></select>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">予算執行状況</h5>
+                <div class="row">
+                    <div class="col-md-4">
+                        <p class="card-text">総予算額: <span id="totalBudget">0</span> 円 <button id="modifyBudgetButton" class="btn btn-sm btn-outline-secondary ms-2" onclick="openModifyBudgetModal(true)">修正</button></p>
+                    </div>
+                    <div class="col-md-4">
+                        <p class="card-text">総執行額: <span id="totalAmount">0</span> 円</p>
+                    </div>
+                    <div class="col-md-4">
+                        <p class="card-text">予算残額: <span id="remainingBudget">0</span> 円</p>
+                    </div>
+                </div>
+                <div class="progress mt-2">
+                    <div id="budgetProgress" class="progress-bar" role="progressbar" style="width: 0%">
+                        0%
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2>支所一覧</h2>
+            <div>
+                <button onclick="exportToExcel()" class="btn btn-success me-2">エクセル出力</button>
+                <button onclick="showAddForm()" class="btn btn-primary">新しい項目を追加</button>
+            </div>
+        </div>
+        <div id="branchList" class="list-group">
+            <!-- 支所リストはJavaScriptで動的に生成 -->
+        </div>
+    </div>
+
+    <!-- 項目追加フォーム（モーダル） -->
+    <div class="modal fade" id="addItemModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addItemModalTitle">新しい項目を追加</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addItemForm" class="needs-validation" novalidate>
+                        <input type="hidden" id="editItemId" value="">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="requestDate" class="form-label">要求年月日</label>
+                                <input type="date" class="form-control" id="requestDate" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="issueDate" class="form-label" style="color: #6c757d;">要求起票年月日</label>
+                                <input type="date" class="form-control" id="issueDate">
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="itemType" class="form-label">種別</label>
+                            <select class="form-select" id="itemType">
+                                <option value="">選択してください</option>
+                                <option value="一般品">一般品</option>
+                                <option value="常用品">常用品</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="branchName" class="form-label">支所名</label>
+                            <select class="form-select" id="branchName" required>
+                                <option value="">支所を選択してください</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="itemName" class="form-label">購入品物名</label>
+                            <input type="text" class="form-control" id="itemName" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="itemStandard" class="form-label">規格（大きさ等）</label>
+                            <input type="text" class="form-control" id="itemStandard">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="itemImage" class="form-label">購入品物の写真</label>
+                            <input type="file" class="form-control" id="itemImage" accept="image/*" onchange="previewImage(event)">
+                            <img id="imagePreview" class="image-preview d-none">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="quantity" class="form-label">数量</label>
+                            <input type="number" class="form-control" id="quantity" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="deliveryDate" class="form-label">納入希望時期</label>
+                            <input type="date" class="form-control" id="deliveryDate">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="supplierName" class="form-label" style="color: #6c757d;">購入業者</label>
+                            <input type="text" class="form-control" id="supplierName">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="amount" class="form-label" style="color: #6c757d;">執行額</label>
+                            <input type="number" class="form-control" id="amount">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                    <button type="button" class="btn btn-primary" id="saveItemButton">追加</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 支所詳細モーダル -->
+    <div class="modal fade" id="branchDetailModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="branchDetailTitle">支所の執行状況</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <h5 class="card-title" id="branchDetailCardTitle">支所の執行状況</h5>
+                            <p class="card-text">総執行額: <span id="branchTotal">0</span> 円</p>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h2>執行項目一覧</h2>
+                        <div>
+                            <button id="exportBranchButton" class="btn btn-success me-2" onclick="exportBranchToExcel()">この支所のデータを出力</button>
+                            <button id="addBranchItemButton" class="btn btn-primary" onclick="showAddFormForBranch()">この支所の項目を追加</button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>要求年月日</th>
+                                    <th>要求起票年月日</th>
+                                    <th>種別</th>
+                                    <th>購入品物名</th>
+                                    <th>規格</th>
+                                    <th>写真</th>
+                                    <th>数量</th>
+                                    <th>納入希望時期</th>
+                                    <th>購入業者</th>
+                                    <th>執行額</th>
+                                </tr>
+                            </thead>
+                            <tbody id="branchItems">
+                                <!-- 項目リストはJavaScriptで動的に生成 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 年度予算設定モーダル -->
+    <div class="modal fade" id="setBudgetModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="setBudgetModalTitle">年度の総予算を設定</h5>
+                </div>
+                <div class="modal-body">
+                    <p><span id="budgetYear"></span>年度の総予算額を入力してください。</p>
+                    <input type="number" id="yearBudgetInput" class="form-control" placeholder="例: 8200000">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" onclick="saveYearBudget()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 画像表示モーダル -->
+    <div class="modal fade" id="imageModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">購入品物の写真</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <img id="modalImage" class="modal-image">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 定数
+        const BRANCHES = [
+            '公園緑地課', // Changed from '本庁'
+            '朝倉支所', '玉川支所', '波方支所', '大西支所', '菊間支所',
+            '吉海支所', '宮窪支所', '伯方支所', '上浦支所', '大三島支所', '関前支所'
+        ];
+        const BUDGET_CATEGORIES = ['公園維持管理費', '緑化推進事業費', '自然公園管理費'];
+        const GLOBAL_SETTINGS_KEY = 'budgetSystemGlobalSettings';
+
+        // データ管理
+        let budgetData = {}; // 科目ごとにロードするので初期は空
+        let currentBudgetCategory;
+        let currentYear;
+        let currentMonth = null; // nullの場合は全月表示、0-11で月を指定 (0:1月, 3:4月)
+        let currentBranch = null; // 現在表示している支所名を保持
+        let editingItemId = null; // 現在編集中のアイテムの budgetData[currentYear].items におけるインデックス (またはID)
+
+        // 初期化
+        function initialize() {
+            // グローバル設定（最後に使用した科目など）を読み込む
+            let globalSettings = JSON.parse(localStorage.getItem(GLOBAL_SETTINGS_KEY)) || {};
+            currentBudgetCategory = globalSettings.lastUsedCategory || BUDGET_CATEGORIES[0]; // デフォルトは最初の科目
+
+            // 科目セレクタを先に生成・設定
+            populateBudgetCategorySelector();
+            document.getElementById('budgetCategorySelector').value = currentBudgetCategory;
+
+            // 現在の科目のデータをロード
+            budgetData = JSON.parse(localStorage.getItem('budgetSystemData_' + currentBudgetCategory)) || {};
+
+            currentYear = getFiscalYear(new Date());
+            if (!budgetData.settings) {
+                budgetData.settings = { lastUsedYear: currentYear };
+            }
+            currentYear = budgetData.settings.lastUsedYear || currentYear;
+            // budgetData.settings.lastUsedYear が現在の科目データに存在しない場合、currentYear を使う
+            if (!budgetData[currentYear]) {
+                 currentYear = getFiscalYear(new Date()).toString(); // 存在しない場合は当年度にする
+            }
+
+
+            populateYearSelector(); // 年度セレクタは科目データロード後に実行
+            populateMonthSelector();
+            populateBranchSelect();
+
+
+            // 各項目にIDがない場合、付与する (過去データ互換性のため)
+            Object.keys(budgetData).forEach(year => {
+                if (year !== 'settings' && budgetData[year] && budgetData[year].items) {
+                    budgetData[year].items.forEach((item, index) => {
+                        if (!item.id) {
+                            item.id = Date.now().toString() + '_' + Math.random().toString(36).substring(2, 9) + '_' + index;
+                        }
+                        if (item.supplierAddress && typeof item.supplierName === 'undefined') {
+                            item.supplierName = item.supplierAddress;
+                        }
+                    });
+                }
+            });
+            // 初期ロード時は saveData() を呼ばない（科目変更時に呼ばれる）
+            loadYearData();
+          }
+
+        // ★ 執行予算科目セレクターを生成する関数
+        function populateBudgetCategorySelector() {
+            const categorySelector = document.getElementById('budgetCategorySelector');
+            categorySelector.innerHTML = BUDGET_CATEGORIES.map(category =>
+                `<option value="${category}">${category}</option>`
+            ).join('');
+        }
+
+        // ★ 執行予算科目変更時の処理
+        function handleBudgetCategoryChange() {
+            currentBudgetCategory = document.getElementById('budgetCategorySelector').value;
+
+            // グローバル設定に最後に使用した科目を保存
+            let globalSettings = JSON.parse(localStorage.getItem(GLOBAL_SETTINGS_KEY)) || {};
+            globalSettings.lastUsedCategory = currentBudgetCategory;
+            localStorage.setItem(GLOBAL_SETTINGS_KEY, JSON.stringify(globalSettings));
+
+            // 新しい科目のデータをロード
+            budgetData = JSON.parse(localStorage.getItem('budgetSystemData_' + currentBudgetCategory)) || {};
+            currentYear = getFiscalYear(new Date()); // デフォルト年度リセット
+             if (!budgetData.settings) { // 新しい科目でデータがまだない場合
+                budgetData.settings = { lastUsedYear: currentYear };
+            }
+            currentYear = budgetData.settings.lastUsedYear || currentYear;
+            if (!budgetData[currentYear]) { // settingsに記録されたyearが実際には存在しない場合
+                currentYear = Object.keys(budgetData).filter(k => k !== 'settings')[0] || getFiscalYear(new Date()).toString();
+                budgetData.settings.lastUsedYear = currentYear; // 存在する年度に更新
+            }
+
+
+            populateYearSelector(); // 年度セレクタを再生成
+            document.getElementById('yearSelector').value = currentYear; // 正しい年度を選択
+
+            currentMonth = null; // 月フィルターをリセット
+            document.getElementById('monthSelector').value = 'null';
+
+            loadYearData();
+        }
+
+
+        // ★ 月セレクターを生成する関数
+        function populateMonthSelector() {
+            const monthSelector = document.getElementById('monthSelector');
+            const months = [
+                { value: 'null', text: '全月' }, // null を文字列 'null' として扱う
+                { value: '3', text: '4月' }, { value: '4', text: '5月' }, { value: '5', text: '6月' },
+                { value: '6', text: '7月' }, { value: '7', text: '8月' }, { value: '8', text: '9月' },
+                { value: '9', text: '10月' }, { value: '10', text: '11月' }, { value: '11', text: '12月' },
+                { value: '0', text: '1月' }, { value: '1', text: '2月' }, { value: '2', text: '3月' }
+            ];
+
+            monthSelector.innerHTML = months.map(month =>
+                `<option value="${month.value}">${month.text}</option>`
+            ).join('');
+
+            // 初期選択を currentMonth に合わせる (currentMonth が null なら 'null' value を選択)
+            monthSelector.value = currentMonth === null ? 'null' : currentMonth.toString();
+        }
+
+        // アイテムを取得するヘルパー関数 (月フィルターを適用)
+        function getItemsForCurrentFilters(branchNameToFilter = null) {
+            const yearData = budgetData[currentYear];
+            if (!yearData || !yearData.items) {
+                return [];
+            }
+
+            let itemsToFilter = yearData.items;
+
+            // 支所名でのフィルタリング (showBranchDetail と exportBranchToExcel で使用)
+            if (branchNameToFilter) {
+                itemsToFilter = itemsToFilter.filter(item => item.branchName === branchNameToFilter);
+            }
+
+            // 月でのフィルタリング
+            if (currentMonth === null) {
+                return itemsToFilter; // 全ての月
+            }
+            return itemsToFilter.filter(item => {
+                if (!item.requestDate) return false; // requestDateがないアイテムは除外
+                const itemDate = new Date(item.requestDate);
+                // getMonth() は 0 (1月) から 11 (12月) を返す
+                // filterByMonth に渡す月は 0 (1月) から 11 (12月) (ただし、UI上は4月が3)
+                return itemDate.getMonth() === currentMonth;
+            });
+        }
+
+        // 年度を取得する関数（4月始まり）
+        function getFiscalYear(date) {
+            return date.getMonth() >= 3 ? date.getFullYear() : date.getFullYear() - 1;
+        }
+
+        // 年度セレクターの生成
+        function populateYearSelector() {
+            const yearSelector = document.getElementById('yearSelector');
+            yearSelector.innerHTML = ''; // 一旦クリア
+
+            let availableYears = [];
+            if (budgetData && Object.keys(budgetData).length > 0) {
+                availableYears = Object.keys(budgetData).filter(key => key !== 'settings');
+            }
+
+            const currentFiscalYear = getFiscalYear(new Date()).toString();
+            if (!availableYears.includes(currentFiscalYear)) {
+                availableYears.push(currentFiscalYear);
+            }
+
+            availableYears.sort((a, b) => b - a);
+
+            if (availableYears.length === 0) { // 万が一、上記処理でも年が取得できない場合（通常は currentFiscalYear が入るはず）
+                availableYears.push(currentFiscalYear);
+            }
+
+            yearSelector.innerHTML = availableYears.map(year =>
+                // currentYear が availableYears に含まれていることを確認してから selected を設定
+                `<option value="${year}" ${year == currentYear && availableYears.includes(currentYear.toString()) ? 'selected' : ''}>${year}年度</option>`
+            ).join('');
+
+            // currentYear がリストにない場合（例えば新しい科目でデータがない場合）、最初の年を選択状態にするか、現在の会計年度を選択
+            if (!availableYears.includes(currentYear.toString()) && availableYears.length > 0) {
+                currentYear = availableYears[0]; // または currentFiscalYear
+                yearSelector.value = currentYear;
+                if(budgetData.settings) budgetData.settings.lastUsedYear = currentYear;
+            } else if (availableYears.includes(currentYear.toString())) {
+                 yearSelector.value = currentYear;
+            } else if (availableYears.length > 0) { // currentYear がどうしても見つからない場合
+                yearSelector.value = availableYears[0];
+                currentYear = availableYears[0];
+                if(budgetData.settings) budgetData.settings.lastUsedYear = currentYear;
+            }
+        }
+
+        // 年度変更時の処理
+        function handleYearChange() {
+            currentYear = document.getElementById('yearSelector').value;
+            currentMonth = null; // 年が変わったら月フィルターをリセット
+            document.getElementById('monthSelector').value = 'null'; // 月セレクタも「全月」にリセット
+            if (!budgetData.settings) budgetData.settings = {}; // settingsがなければ初期化
+            budgetData.settings.lastUsedYear = currentYear;
+            saveData(); // 現在の科目のデータを保存
+            loadYearData();
+        }
+
+        // ★ 月セレクター変更時の処理
+        function handleMonthChange() {
+            const selectedMonthValue = document.getElementById('monthSelector').value;
+            currentMonth = selectedMonthValue === 'null' ? null : parseInt(selectedMonthValue);
+            // lastUsedYearの保存は不要。月変更では年度は変わらない。
+            loadYearData(); // データを再読み込みしてフィルターを適用
+        }
+
+        // function filterByMonth(month) { // ★ 不要になった
+        //     currentMonth = month;
+        //     loadYearData();
+        //     updateMonthButtonStates();
+        // }
+
+        // function updateMonthButtonStates() { // ★ 不要になった
+        //     const buttons = document.querySelectorAll('.btn-outline-primary[onclick^="filterByMonth"]');
+        //     buttons.forEach(button => {
+        //         const monthArg = button.getAttribute('onclick').match(/\((.*?)\)/)[1];
+        //         if (monthArg === 'null' && currentMonth === null) {
+        //             button.classList.add('active');
+        //         } else if (parseInt(monthArg) === currentMonth) {
+        //             button.classList.add('active');
+        //         } else {
+        //             button.classList.remove('active');
+        //         }
+        //     });
+        // }
+
+
+        // ★ 新しい関数: 年度予算設定モーダルを開く
+        function openModifyBudgetModal(isModification = false) {
+            const yearData = budgetData[currentYear]; // currentYear のデータ、なければ undefined
+            const modalTitle = document.getElementById('setBudgetModalTitle');
+            const budgetInput = document.getElementById('yearBudgetInput');
+            const budgetYearSpan = document.getElementById('budgetYear');
+
+            budgetYearSpan.textContent = currentYear;
+
+            // isModification が true で、かつ yearData が存在し、その totalBudget が設定されている場合のみ修正モード
+            if (isModification && yearData && typeof yearData.totalBudget !== 'undefined') {
+                modalTitle.textContent = currentYear + '年度の総予算を修正';
+                budgetInput.value = yearData.totalBudget;
+            } else {
+                // それ以外（新規設定、または isModification が false）の場合
+                modalTitle.textContent = currentYear + '年度の総予算を設定';
+                budgetInput.value = ''; // 新規入力のためにクリア
+                budgetInput.placeholder = '例: 8200000';
+            }
+
+            const setBudgetModal = new bootstrap.Modal(document.getElementById('setBudgetModal'));
+            setBudgetModal.show();
+        }
+
+        // 対象年度のデータをロード
+        function loadYearData() {
+            // budgetData は既に現在の科目のものを指している前提
+            // currentYear も handleBudgetCategoryChange や handleYearChange で設定済み
+            if (!budgetData[currentYear] || typeof budgetData[currentYear].totalBudget === 'undefined') {
+                 // 年度データが存在しないか、予算が未設定の場合
+                if(Object.keys(budgetData).filter(key => key !== 'settings').length === 0 || !budgetData[currentYear]){
+                    // 科目に年度データが全くないか、currentYearに対応するデータがない場合は、予算設定を促す
+                     openModifyBudgetModal(false);
+                } else {
+                    // 年度データはあるが予算が未設定の場合 (古いデータ構造などから来た場合や、手動で消された場合など)
+                    // このケースは通常発生しづらいが、念のため。
+                     openModifyBudgetModal(false);
+                }
+            } else {
+                updateBudgetDisplay();
+                populateBranchList();
+                // 必要に応じて支所詳細モーダルも更新
+                if (currentBranch && document.getElementById('branchDetailModal').classList.contains('show')) {
+                    showBranchDetail(currentBranch);
+                }
+            }
+        }
+
+        // 年度の予算を保存
+        function saveYearBudget() {
+            const budgetInput = document.getElementById('yearBudgetInput');
+            const newBudget = parseInt(budgetInput.value);
+
+            if (isNaN(newBudget) || newBudget < 0) {
+                alert('有効な予算額を入力してください（0以上の数値を入力してください）。');
+                return;
+            }
+
+            const yearDataForBudgetCheck = budgetData[currentYear] || { items: [] }; // budgetData[currentYear] がなければ空のアイテムリストでチェック
+            let totalSpent = 0;
+            if (yearDataForBudgetCheck.items && Array.isArray(yearDataForBudgetCheck.items)) {
+                totalSpent = yearDataForBudgetCheck.items.reduce((sum, item) => sum + (item.amount || 0), 0);
+            }
+
+
+            if (newBudget < totalSpent) {
+                alert('予算額は総執行額（' + totalSpent.toLocaleString() + '円）より少なくすることはできません。');
+                return;
+            }
+
+            if (!budgetData[currentYear]) {
+                budgetData[currentYear] = { totalBudget: 0, items: [] };
+            }
+            budgetData[currentYear].totalBudget = newBudget;
+            saveData(); // これで現在の科目のデータが保存される
+
+            const modalInstance = bootstrap.Modal.getInstance(document.getElementById('setBudgetModal'));
+            if (modalInstance) {
+                modalInstance.hide();
+            }
+            loadYearData();
+        }
+
+        // データをlocalStorageに保存
+        function saveData() {
+            // 現在の科目のデータを保存
+            if (currentBudgetCategory) {
+                localStorage.setItem('budgetSystemData_' + currentBudgetCategory, JSON.stringify(budgetData));
+            }
+
+            // グローバル設定（最後に使用した科目など）を更新して保存
+            let globalSettings = JSON.parse(localStorage.getItem(GLOBAL_SETTINGS_KEY)) || {};
+            globalSettings.lastUsedCategory = currentBudgetCategory;
+            // 必要であれば、他のグローバルな設定もここで保存
+            localStorage.setItem(GLOBAL_SETTINGS_KEY, JSON.stringify(globalSettings));
+        }
+
+        // 予算表示の更新
+        function updateBudgetDisplay() {
+            const yearData = budgetData[currentYear];
+            if (!yearData || yearData.totalBudget === undefined) {
+                // まだ当該年度の予算が設定されていない場合は何もしないか、初期表示に戻す
+                document.getElementById('totalBudget').textContent = '0';
+                document.getElementById('totalAmount').textContent = '0';
+                document.getElementById('remainingBudget').textContent = '0';
+                document.getElementById('budgetProgress').style.width = `0%`;
+                document.getElementById('budgetProgress').textContent = `0%`;
+                return;
+            }
+            const totalBudget = yearData.totalBudget;
+            // 全支所の、フィルターされた月のアイテムを取得して合計執行額を計算
+            const filteredItems = getItemsForCurrentFilters();
+            const totalAmount = filteredItems.reduce((sum, item) => sum + item.amount, 0);
+            const remainingBudget = totalBudget - totalAmount;
+            const progressPercentage = totalBudget > 0 ? (totalAmount / totalBudget * 100).toFixed(1) : 0;
+
+            document.getElementById('totalBudget').textContent = totalBudget.toLocaleString();
+            // totalAmount はフィルターされた結果を反映
+            document.getElementById('totalAmount').textContent = totalAmount.toLocaleString();
+            // remainingBudget もフィルター結果に基づいて計算されるべきだが、
+            // ここでの残額は「年度全体の予算残額」なのか「表示月までの予算残額」なのか仕様確認が必要。
+            // 一旦、年度全体の予算に対する総執行額(フィルターされた)の残額を表示する。
+            document.getElementById('remainingBudget').textContent = remainingBudget.toLocaleString();
+            document.getElementById('budgetProgress').style.width = `${progressPercentage}%`;
+            document.getElementById('budgetProgress').textContent = `${progressPercentage}%`;
+        }
+
+        // 支所リストの生成
+        function populateBranchList() {
+            const branchList = document.getElementById('branchList');
+            branchList.innerHTML = BRANCHES.map(branch => `
+                <a href="#" class="list-group-item list-group-item-action" onclick="showBranchDetail('${branch}')">
+                    ${branch}
+                </a>
+            `).join('');
+        }
+
+        // 支所選択肢の生成
+        function populateBranchSelect() {
+            const branchSelect = document.getElementById('branchName');
+            branchSelect.innerHTML = '<option value="">支所を選択してください</option>' +
+                BRANCHES.map(branch => `<option value="${branch}">${branch}</option>`).join('');
+        }
+
+        // 画像プレビューの表示
+        function previewImage(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const preview = document.getElementById('imagePreview');
+                    preview.src = e.target.result;
+                    preview.classList.remove('d-none');
+                }
+                reader.readAsDataURL(file);
+            }
+        }
+
+        // 画像の表示
+        function showImage(imageData) {
+            const modal = new bootstrap.Modal(document.getElementById('imageModal'));
+            document.getElementById('modalImage').src = imageData;
+            modal.show();
+        }
+
+        // 項目追加フォームの表示 (メインの「新しい項目を追加」ボタンから)
+        function showAddForm() {
+            currentBranch = null;
+            showItemForm(null); // ★変更点：新しい showItemForm 関数を呼び出す
+        }
+
+        // 特定の支所の項目追加フォームの表示 (支所詳細モーダルから)
+        function showAddFormForBranch() {
+            // currentBranch は showBranchDetail で設定されている前提
+            if (currentBranch) {
+                showItemForm(null, currentBranch); // ★変更点：新しい showItemForm 関数を呼び出す
+            } else {
+                alert("表示中の支所が特定できません。");
+            }
+        }
+
+        // 項目の追加
+        function addItem() {
+            const form = document.getElementById('addItemForm');
+            if (!form.checkValidity()) { // 必須入力チェックを再度有効化
+                form.classList.add('was-validated');
+                return;
+            }
+
+            const imageFile = document.getElementById('itemImage').files[0];
+            let imageData = null;
+
+            if (imageFile) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    imageData = e.target.result;
+                    saveItem(imageData);
+                }
+                reader.readAsDataURL(imageFile);
+            } else {
+                saveItem(null);
+            }
+        }
+
+        // 項目の保存
+        function saveItem(imageData) {
+            const newItem = {
+                id: Date.now().toString() + '_' + Math.random().toString(36).substring(2, 9), // 新規アイテムにもIDを付与
+                requestDate: document.getElementById('requestDate').value,
+                issueDate: document.getElementById('issueDate').value,
+                itemType: document.getElementById('itemType').value,
+                branchName: document.getElementById('branchName').value,
+                itemName: document.getElementById('itemName').value,
+                standard: document.getElementById('itemStandard').value, // 新しいフィールド
+                quantity: parseInt(document.getElementById('quantity').value), // 必須なので空文字の心配は少ない
+                deliveryDate: document.getElementById('deliveryDate').value,
+                supplierName: document.getElementById('supplierName').value,
+                amount: document.getElementById('amount').value === '' ? 0 : parseInt(document.getElementById('amount').value),
+                image: imageData
+            };
+
+            // budgetData[currentYear] が存在し、かつ totalBudget が設定されているか確認
+            if (!budgetData[currentYear] || typeof budgetData[currentYear].totalBudget === 'undefined') {
+                alert('先に現在の年度の総予算を設定してください。');
+                openModifyBudgetModal(false); // 予算設定モーダルを開く
+                return;
+            }
+
+            const yearData = budgetData[currentYear]; // この時点で yearData は存在するはず
+            const currentTotalAmount = (yearData.items || []).reduce((sum, item) => sum + (item.amount || 0), 0);
+
+            if (currentTotalAmount + newItem.amount > yearData.totalBudget) {
+                alert('予算を超過します。入力金額（' + newItem.amount.toLocaleString() + '円）を確認してください。現在の執行額合計: ' + currentTotalAmount.toLocaleString() + '円、予算: ' + yearData.totalBudget.toLocaleString() + '円');
+                return;
+            }
+
+            if (!yearData.items) { // 基本的には yearData があれば items もあるはずだが念のため
+                yearData.items = [];
+            }
+            yearData.items.push(newItem);
+            saveData(); // 現在の科目のデータが保存される
+
+            updateBudgetDisplay();
+            bootstrap.Modal.getInstance(document.getElementById('addItemModal')).hide();
+            document.getElementById('branchName').disabled = false;
+
+            // 支所詳細モーダルが開いている場合は更新
+            if (currentBranch) {
+                showBranchDetail(currentBranch); // currentMonth を考慮して更新
+            }
+        }
+
+            // 支所詳細の表示
+        function showBranchDetail(branchName) {
+            currentBranch = branchName; // グローバルな currentBranch を設定
+            // getItemsForCurrentFilters を使用して、現在の年度、月、および指定された支所でフィルタリング
+            const branchItemsFilteredByMonth = getItemsForCurrentFilters(branchName);
+            const branchTotal = branchItemsFilteredByMonth.reduce((sum, item) => sum + item.amount, 0);
+
+            // モーダルのタイトルなどを設定
+            const monthText = currentMonth !== null ? `${new Date(0, currentMonth).toLocaleString('default', { month: 'long' })}の` : '';
+            document.getElementById('branchDetailTitle').textContent = `${branchName}の${monthText}執行状況`;
+            document.getElementById('branchTotal').textContent = branchTotal.toLocaleString();
+
+            const isHonchoEquivalent = branchName === BRANCHES[0]; // BRANCHES[0] は '公園緑地課'
+            const term = isHonchoEquivalent ? BRANCHES[0] : '支所';
+
+            document.getElementById('branchDetailCardTitle').textContent = `${term}の執行状況`;
+            document.getElementById('exportBranchButton').textContent = `この${term}のデータを出力`;
+
+            const addBranchItemBtn = document.getElementById('addBranchItemButton');
+            if(addBranchItemBtn) { // ボタンが存在することを確認
+                addBranchItemBtn.textContent = `この${term}の項目を追加`; // ボタンテキストも更新
+                addBranchItemBtn.onclick = () => showItemForm(null, currentBranch); // onclickイベントを再設定
+            }
+
+            // 重複チェックのために全アイテムの品物名を一時的に保持（IDと共に）
+            // 自分自身を除外し、かつ品物名が空でないもののみを対象とする
+            // 注意: この allItems は月フィルターされていない全アイテムを指すようにする必要がある
+            const allItemsForDuplicateCheck = (budgetData[currentYear] && budgetData[currentYear].items) ? budgetData[currentYear].items : [];
+            const allItemNamesAndIds = allItemsForDuplicateCheck
+                .filter(i => i.id !== undefined && i.itemName && i.itemName.trim() !== "")
+                .map(i => ({id: i.id, name: i.itemName.trim()}));
+
+            const itemsHtml = branchItemsFilteredByMonth.map(item => { // フィルターされたアイテムを使用
+                // originalIndex を見つけるために、フィルターされていない全アイテムリストから探す
+                const originalIndex = allItemsForDuplicateCheck.findIndex(originalItem => originalItem.id === item.id );
+
+                let isDuplicate = false;
+                if (item.itemName && item.itemName.trim() !== "") {
+                    isDuplicate = allItemNamesAndIds.some(otherItem =>
+                        otherItem.name === item.itemName.trim() && otherItem.id !== item.id
+                    );
+                }
+                // const textClass = isDuplicate ? 'text-danger' : ''; // 行全体への適用はやめる
+
+                // 購入品物名のセルに適用するスタイルを決定
+                const itemNameCellStyle = isDuplicate ? 'style="background-color: #fff3cd; color: #dc3545;"' : '';
+
+                return `
+                <tr>
+                    <td>${item.requestDate}</td>
+                    <td>${item.issueDate}</td>
+                    <td>${item.itemType || ''}</td>
+                    <td ${itemNameCellStyle}>${item.itemName}</td>
+                    <td>${item.standard || ''}</td>
+                    <td>
+                        ${item.image ?
+                            `<img src="${item.image}" class="item-image" onclick="showImage('${item.image}')" alt="${item.itemName}">` :
+                            '写真なし'
+                        }
+                    </td>
+                    <td>${item.quantity}</td>
+                    <td>${item.deliveryDate || ''}</td>
+                    <td>${item.supplierName || ''}</td>
+                    <td>${item.amount.toLocaleString()} 円</td>
+                    <td>
+                        <button class="btn btn-sm btn-warning me-1" onclick="editItem(${originalIndex})">修正</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteItem(${originalIndex})">削除</button>
+                    </td>
+                </tr>
+            `}).join('');
+
+            document.getElementById('branchItems').innerHTML = itemsHtml;
+
+            new bootstrap.Modal(document.getElementById('branchDetailModal')).show();
+        }
+
+        // エクセル出力用のCSVデータ生成
+        function generateCSV(items) {
+            const headers = [
+                '支所名',
+                '要求年月日',
+                '要求起票年月日',
+                '種別',
+                '購入品物名',
+                '規格', // 新しいヘッダー
+                '数量',
+                '納入希望時期',
+                '購入業者',
+                '執行額'
+            ].join(',');
+
+            const rows = items.map(item => [
+                item.branchName,
+                item.requestDate,
+                item.issueDate,
+                item.itemType || '',
+                item.itemName,
+                item.standard || '', // 新しいデータ
+                item.quantity,
+                item.deliveryDate || '',
+                item.supplierName,
+                item.amount
+            ].join(','));
+
+            return [headers, ...rows].join('\n');
+        }
+
+        // 全体のデータをエクセル出力
+        function exportToExcel() {
+            // getItemsForCurrentFilters を使用して、現在のフィルター条件に合ったアイテムを取得
+            const itemsToExport = getItemsForCurrentFilters();
+            const csv = generateCSV(itemsToExport);
+            const monthSuffix = currentMonth !== null ? `_${new Date(0, currentMonth).getMonth() + 1}月` : '_全期間';
+            const categoryName = currentBudgetCategory.replace(/\s+/g, '_'); // 科目名のスペースをアンダースコアに
+            const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `予算執行管理_${categoryName}_${currentYear}年度${monthSuffix}_${new Date().toLocaleDateString()}.csv`;
+            link.click();
+        }
+
+        // 項目追加/修正フォームの表示 (itemIndexがnullなら新規、さもなければ編集)
+        // forBranchName は、特定の支所のモーダルから呼ばれた場合にその支所名を渡す
+        function showItemForm(itemIndex = null, forBranchName = null) {
+            const modal = new bootstrap.Modal(document.getElementById('addItemModal'));
+            const form = document.getElementById('addItemForm');
+            form.reset();
+            document.getElementById('imagePreview').classList.add('d-none');
+            document.getElementById('itemImage').value = '';
+
+            const modalTitleElement = document.getElementById('addItemModalTitle');
+            const saveButton = document.getElementById('saveItemButton');
+            const branchNameSelect = document.getElementById('branchName');
+            const editItemIdInput = document.getElementById('editItemId');
+
+            editingItemId = null;
+            editItemIdInput.value = '';
+
+
+            if (itemIndex !== null && budgetData[currentYear] && budgetData[currentYear].items && budgetData[currentYear].items[itemIndex]) {
+                editingItemId = itemIndex;
+                editItemIdInput.value = itemIndex;
+
+                const item = budgetData[currentYear].items[itemIndex];
+                modalTitleElement.textContent = '項目を修正';
+                saveButton.textContent = '保存';
+                saveButton.onclick = updateItem;
+
+                document.getElementById('requestDate').value = item.requestDate;
+                document.getElementById('issueDate').value = item.issueDate;
+                document.getElementById('itemType').value = item.itemType;
+                branchNameSelect.value = item.branchName;
+                document.getElementById('itemName').value = item.itemName;
+                document.getElementById('itemStandard').value = item.standard || ''; // 新しいフィールド
+                document.getElementById('quantity').value = item.quantity;
+                document.getElementById('deliveryDate').value = item.deliveryDate || '';
+                document.getElementById('supplierName').value = item.supplierName || '';
+                document.getElementById('amount').value = item.amount;
+                if (item.image) {
+                    const preview = document.getElementById('imagePreview');
+                    preview.src = item.image;
+                    preview.classList.remove('d-none');
+                }
+                branchNameSelect.disabled = true;
+
+            } else {
+                modalTitleElement.textContent = '新しい項目を追加';
+                saveButton.textContent = '追加';
+                saveButton.onclick = addItem;
+
+                if (forBranchName) {
+                    branchNameSelect.value = forBranchName;
+                    branchNameSelect.disabled = true;
+                } else {
+                    branchNameSelect.value = '';
+                    branchNameSelect.disabled = false;
+                }
+            }
+            modal.show();
+        }
+
+        function editItem(originalIndex) {
+            showItemForm(originalIndex, currentBranch);
+        }
+
+        function updateItem() {
+            const itemIndexToUpdate = document.getElementById('editItemId').value;
+            if (itemIndexToUpdate === '' || itemIndexToUpdate === null) {
+                alert("編集対象の項目が見つかりません。");
+                return;
+            }
+            const numericItemIndex = parseInt(itemIndexToUpdate);
+
+            if (isNaN(numericItemIndex) || numericItemIndex < 0 || !budgetData[currentYear].items || numericItemIndex >= budgetData[currentYear].items.length) {
+                alert("編集対象の項目が見つからないか、インデックスが無効です。");
+                return;
+            }
+
+            const form = document.getElementById('addItemForm');
+            if (!form.checkValidity()) { // 必須入力チェックを再度有効化
+                form.classList.add('was-validated');
+                return;
+            }
+
+            const imageFile = document.getElementById('itemImage').files[0];
+            const existingItem = budgetData[currentYear].items[numericItemIndex];
+
+            const processSave = (newImageData) => {
+                const updatedItem = {
+                    ...existingItem,
+                    requestDate: document.getElementById('requestDate').value,
+                    issueDate: document.getElementById('issueDate').value,
+                    itemType: document.getElementById('itemType').value,
+                    // branchName: document.getElementById('branchName').value, // 支所名は編集不可なので既存の値を維持
+                    itemName: document.getElementById('itemName').value,
+                    standard: document.getElementById('itemStandard').value, // 新しいフィールド
+                    quantity: parseInt(document.getElementById('quantity').value), // 必須なので空文字の心配は少ない
+                    deliveryDate: document.getElementById('deliveryDate').value,
+                    supplierName: document.getElementById('supplierName').value, // supplierAddress は削除
+                    amount: document.getElementById('amount').value === '' ? 0 : parseInt(document.getElementById('amount').value),
+                    image: newImageData !== undefined ? newImageData : existingItem.image
+                };
+
+                const yearData = budgetData[currentYear]; // この時点で yearData と yearData.items は存在するはず
+                if (!yearData || !yearData.items) { // 万が一のガード
+                    alert("データエラー: 対象年度のデータまたはアイテムリストが見つかりません。");
+                    return;
+                }
+
+                const otherItemsAmount = yearData.items
+                    .filter((item, index) => item.id !== existingItem.id) // IDで比較して自身を除く
+                    .reduce((sum, item) => sum + (item.amount || 0), 0);
+
+                if (otherItemsAmount + updatedItem.amount > yearData.totalBudget) {
+                    alert('予算を超過します。入力金額（' + updatedItem.amount.toLocaleString() + '円）を確認してください。他の項目の執行額合計: ' + otherItemsAmount.toLocaleString() + '円、予算: ' + yearData.totalBudget.toLocaleString() + '円');
+                    return;
+                }
+
+                // numericItemIndex は allItemsForDuplicateCheck から取得したインデックスなので、
+                // budgetData[currentYear].items の中での正しいインデックスを探し直すか、IDでアイテムを特定して更新する
+                const itemIndexInCurrentData = budgetData[currentYear].items.findIndex(item => item.id === existingItem.id);
+                if (itemIndexInCurrentData === -1) {
+                    alert("編集対象のアイテムが現在のデータセットで見つかりません。");
+                    return;
+                }
+
+                budgetData[currentYear].items[itemIndexInCurrentData] = updatedItem;
+                saveData(); // 現在の科目のデータが保存される
+                updateBudgetDisplay();
+
+                const modalInstance = bootstrap.Modal.getInstance(document.getElementById('addItemModal'));
+                if (modalInstance) {
+                    modalInstance.hide();
+                }
+                document.getElementById('branchName').disabled = false;
+
+                if (currentBranch) {
+                    showBranchDetail(currentBranch);
+                }
+                editingItemId = null;
+                document.getElementById('editItemId').value = '';
+            };
+
+            const imagePreviewElement = document.getElementById('imagePreview');
+            if (imageFile) {
+                const reader = new FileReader();
+                reader.onload = (e) => processSave(e.target.result);
+                reader.readAsDataURL(imageFile);
+            } else {
+                processSave(imagePreviewElement.src && !imagePreviewElement.classList.contains('d-none') ? imagePreviewElement.src : existingItem.image);
+            }
+        }
+
+        function deleteItem(originalIndex) {
+            if (originalIndex < 0 || !budgetData[currentYear].items || originalIndex >= budgetData[currentYear].items.length) {
+                alert("削除対象の項目が見つかりません。");
+                return;
+            }
+            const itemToDelete = budgetData[currentYear].items[originalIndex];
+            if (confirm(`「${itemToDelete.itemName}」を削除してもよろしいですか？`)) {
+                const deletedItemBranchName = itemToDelete.branchName;
+                budgetData[currentYear].items.splice(originalIndex, 1);
+                saveData();
+                updateBudgetDisplay();
+                if (currentBranch === deletedItemBranchName) {
+                    showBranchDetail(deletedItemBranchName);
+                }
+            }
+        }
+
+        // 支所のデータをエクセル出力
+        function exportBranchToExcel() {
+            // getItemsForCurrentFilters を使用して、現在の支所と月のフィルター条件に合ったアイテムを取得
+            const itemsToExport = getItemsForCurrentFilters(currentBranch);
+            const csv = generateCSV(itemsToExport);
+            const monthSuffix = currentMonth !== null ? `_${new Date(0, currentMonth).getMonth() + 1}月` : '_全期間';
+            const categoryName = currentBudgetCategory.replace(/\s+/g, '_'); // 科目名のスペースをアンダースコアに
+            const branchNameSafe = currentBranch.replace(/\s+/g, '_');
+            const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `予算執行管理_${categoryName}_${currentYear}年度_${branchNameSafe}${monthSuffix}_${new Date().toLocaleDateString()}.csv`;
+            link.click();
+        }
+
+        // 初期化の実行
+        initialize();
+    </script>
+</body>
+</html>
